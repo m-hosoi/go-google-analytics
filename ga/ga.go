@@ -4,26 +4,27 @@ import (
 	"strconv"
 	"time"
 
+	perrors "github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/analytics/v3"
 )
 
-// NewContext is constractor
-func NewContext(clientID, clientSecret, refreshToken string) Context {
-	return Context{clientID: clientID, clientSecret: clientSecret, refreshToken: refreshToken}
+// NewAccountToken is constractor
+func NewAccountToken(clientID, clientSecret, refreshToken string) AccountToken {
+	return AccountToken{clientID: clientID, clientSecret: clientSecret, refreshToken: refreshToken}
 }
 
-// Context .
-type Context struct {
+// AccountToken .
+type AccountToken struct {
 	clientID     string
 	clientSecret string
 	refreshToken string
 }
 
 // CreateAnalyticsService : create service
-func (ac Context) CreateAnalyticsService() *analytics.Service {
+func (ac AccountToken) CreateAnalyticsService() *analytics.Service {
 	config := &oauth2.Config{
 		ClientID:     ac.clientID,
 		ClientSecret: ac.clientSecret,
@@ -40,7 +41,7 @@ func (ac Context) CreateAnalyticsService() *analytics.Service {
 }
 
 // GetEvent is ...
-func GetEvent(c Context, id string, category string, days int, useRegex bool) map[string]int {
+func GetEvent(c AccountToken, id string, category string, days int, useRegex bool) (map[string]int, error) {
 	filters := ""
 	if useRegex {
 		filters = "ga:eventCategory=~" + category
@@ -51,7 +52,7 @@ func GetEvent(c Context, id string, category string, days int, useRegex bool) ma
 }
 
 // Get is ...
-func Get(c Context, id, metrics, dimensions, filters, sortOrder string, days int) map[string]int {
+func Get(c AccountToken, id, metrics, dimensions, filters, sortOrder string, days int) (map[string]int, error) {
 	svc := c.CreateAnalyticsService()
 	ds := analytics.NewDataGaService(svc)
 	now := time.Now()
@@ -63,13 +64,15 @@ func Get(c Context, id, metrics, dimensions, filters, sortOrder string, days int
 		query = query.Filters(filters)
 	}
 	data, err := query.Do()
-	checkErr(err)
+	if err != nil {
+		return nil, perrors.Wrap(err, "ga error")
+	}
 	res := map[string]int{}
 	for _, v := range data.Rows {
 		i, _ := strconv.Atoi(v[1])
 		res[v[0]] = i
 	}
-	return res
+	return res, nil
 
 }
 func checkErr(err error) {
